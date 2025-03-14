@@ -86,35 +86,36 @@ def send_status():
         return
         
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        message = f"{SENDER_ID}:{'1' if motion_sensor.motion_detected else '0'}"
-        sock.sendto(message.encode('utf-8'), (receiver_ip, STATUS_PORT))
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            message = f"{SENDER_ID}:{'1' if motion_sensor.motion_detected and mw_sensor.motion_detected else '0'}"
+            sock.sendto(message.encode('utf-8'), (receiver_ip, STATUS_PORT))
     except Exception as e:
         print(f"CHyba pri poslaní statusu: {e}")
-    finally:
-        sock.close()
 
 def control_listener():
     """ON OFF control commands počuvač"""
     global system_active
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('', STATUS_PORT))
-    print("Pocuvanie control commandov zapnute")
-    
-    while True:
-        try:
-            data, addr = sock.recvfrom(1024)
-            message = data.decode('utf-8')
-            if message.startswith("SYSTEM:"):
-                cmd = message.split(":", 1)[1].strip().upper()
-                if cmd == "ON":
-                    system_active = True
-                    print("System AKTIVOVANÝ")
-                elif cmd == "OFF":
-                    system_active = False
-                    print("System DEAKTIVOVANÝ")
-        except Exception as e:
-            print(f"Control lis error: {e}")
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.bind(('', STATUS_PORT))
+        sock.settimeout(5)
+        print("Pocuvanie control commandov zapnute")
+        
+        while True:
+            try:
+                data, addr = sock.recvfrom(1024)
+                message = data.decode('utf-8')
+                if message.startswith("SYSTEM:"):
+                    cmd = message.split(":", 1)[1].strip().upper()
+                    if cmd == "ON":
+                        system_active = True
+                        print("System AKTIVOVANÝ")
+                    elif cmd == "OFF":
+                        system_active = False
+                        print("System DEAKTIVOVANÝ")
+            except socket.timeout:
+                continue
+            except Exception as e:
+                print(f"Control lis error: {e}")
 
 def main():
     # Start control listener thread
@@ -131,15 +132,22 @@ def main():
         send_status()
         
         # Check for motion
-        if motion_sensor.motion_detected:
-            print("Motion detected!")
+        if motion_sensor.motion_detected and mw_sensor.motion_detected:
+            print("Motion detected by both sensors!")
             if system_active:
-                # Capture and send image
-                stream = io.BytesIO()
-                camera.capture(stream, format='jpeg')
-                image_data = stream.getvalue()
-                if not send_image(image_data):
-                    receiver_ip = None  # Force rediscovery if send fails
+                try:
+                    # Capture and send image if camera is connected
+                    if camera:
+                        stream = io.BytesIO()
+                        camera.capture(stream, format='jpeg')
+                        image_data = stream.getvalue()
+                        if not send_image(image_data):
+                            receiver_ip = None  # Force rediscovery if send fails
+                    else:
+                        print("No camera connected, sending status info only.")
+                        send_status()
+                except Exception as e:
+                    print(f"Error capturing or sending image: {e}")
             else:
                 print("System je vypnuty, nezachytavame fotky")
         
@@ -151,4 +159,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\nUkončenie programu")
     finally:
-        camera.close()
+        if camera:
+            camera.close()
