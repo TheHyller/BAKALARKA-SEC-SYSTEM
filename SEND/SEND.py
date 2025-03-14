@@ -1,7 +1,7 @@
 from gpiozero import MotionSensor
 import time
 import socket
-import picamera
+from picamera2 import Picamera2, Preview
 import io
 import threading
 import struct
@@ -16,9 +16,9 @@ BUFFER_SIZE = 4096
 # Hardware
 mw_sensor = MotionSensor(3)  # mw sensor  GPIO3
 motion_sensor = MotionSensor(4)  # pohyb sensor  GPIO4
-# mozno bude treba prepisat pi camera na //libcamera-* alebo rpicam-*// https://www.raspberrypi.com/documentation/computers/camera_software.html
-# pozor zmena na 64bit asi v tom bude bordel
-camera = picamera.PiCamera()
+# Using Picamera2 with libcamera
+camera = Picamera2()
+camera.configure(camera.create_still_configuration())
 
 # Global state
 receiver_ip = None
@@ -139,7 +139,9 @@ def main():
                     # Capture and send image if camera is connected
                     if camera:
                         stream = io.BytesIO()
-                        camera.capture(stream, format='jpeg')
+                        camera.start()
+                        camera.capture_file(stream, format='jpeg')
+                        camera.stop()
                         image_data = stream.getvalue()
                         if not send_image(image_data):
                             receiver_ip = None  # Force rediscovery if send fails
