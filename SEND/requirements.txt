@@ -1,6 +1,6 @@
 Kivy==2.1.0
 kivymd==1.1.1
-Pillow==9.0.1
+Pillow==10.3.0
 python-socketio==5.1.0
 requests==2.31.0
 python-dotenv==1.0.0
