@@ -1,5 +1,5 @@
 gpiozero==1.6.2
 picamera2==0.3.12
 RPi.GPIO==0.7.0
-Pillow==9.0.1
+Pillow==10.3.0
 numpy==1.24.3
